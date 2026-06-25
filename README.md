@@ -1,8 +1,4 @@
-Вот готовый **README.md** для Hedge Service. Просто скопируйте и вставьте в файл `README.md` в корне проекта.
 
----
-
-```markdown
 # 🛡️ Hedge Service
 
 <div align="center">
