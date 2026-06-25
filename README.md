@@ -21,6 +21,9 @@
 
 ---
 
+
+---
+
 ## 🔑 Ключевые паттерны
 
 | Паттерн | Описание |
@@ -50,35 +53,3 @@ curl -X POST http://localhost:8080/webhook/transfer \
 # Посмотреть логи
 docker-compose logs -f hedge-service
 
-
-📡 API
-POST /webhook/transfer
-Запрос:
-{
-  "external_id": "pay-123",
-  "client_id": "client-abc",
-  "amount": "500.00",
-  "currency": "USD",
-  "wallet_addr": "bc1q..."
-}
-
-
-📊 Мониторинг
-Сервис	Порт
-Prometheus	9090
-Grafana	3000 (admin/admin)
-
-hedge-service/
-├── cmd/           # Точка входа
-├── internal/      # Внутренняя логика (domain, usecase, worker)
-├── migrations/    # SQL-миграции
-├── docker-compose.yml
-└── Makefile
-
-📝 Лицензия
-MIT © 2026
-
-<div align="center">
-⭐ Поставьте звезду, если проект полезен!
-
-</div> ```
