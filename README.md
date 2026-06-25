@@ -53,6 +53,7 @@ curl -X POST http://localhost:8080/webhook/transfer \
 # Посмотреть логи
 docker-compose logs -f hedge-service
 
+---
 
 hedge-service/
 ├── cmd/
