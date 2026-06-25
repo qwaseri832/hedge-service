@@ -53,3 +53,38 @@ curl -X POST http://localhost:8080/webhook/transfer \
 # Посмотреть логи
 docker-compose logs -f hedge-service
 
+
+hedge-service/
+├── cmd/
+│   └── main.go                   # Точка входа, сборка зависимостей
+├── config/
+│   └── config.go                 # Чтение переменных окружения
+├── internal/
+│   ├── domain/
+│   │   ├── models.go             # Transfer, Order, OutboxNotification
+│   │   └── repository.go         # Интерфейсы репозиториев
+│   ├── repository/
+│   │   └── postgres.go           # Реализация с SKIP LOCKED и Outbox-транзакцией
+│   ├── usecase/
+│   │   └── hedge.go              # Бизнес-логика (регистрация, обработка)
+│   ├── worker/
+│   │   ├── transfer_worker.go    # Воркер для переводов
+│   │   └── notification_worker.go # Воркер для уведомлений
+│   ├── handler/
+│   │   └── http.go               # HTTP-обработчики (webhook, status, health, metrics)
+│   ├── platform/
+│   │   ├── exchange.go           # Интерфейс биржи + Mock
+│   │   └── notification.go       # Интерфейс отправки + Mock
+│   └── metrics/
+│       └── metrics.go            # Prometheus-метрики
+├── migrations/
+│   ├── 001_init.up.sql
+│   └── 001_init.down.sql
+├── docker/
+│   └── prometheus.yml
+├── docker-compose.yml
+├── Dockerfile
+├── Makefile
+├── go.mod
+├── go.sum
+└── README.md
