@@ -1,14 +1,12 @@
-# 🛡️ Hedge Service
-
 <div align="center">
 
-![Go](https://img.shields.io/badge/Go-1.22-00ADD8?style=for-the-badge&logo=go)
+![Go](https://img.shields.io/badge/Go-1.26-00ADD8?style=for-the-badge&logo=go)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=for-the-badge&logo=postgresql)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker)
 ![Prometheus](https://img.shields.io/badge/Prometheus-Monitor-E6522C?style=for-the-badge&logo=prometheus)
 ![Grafana](https://img.shields.io/badge/Grafana-Dashboards-F46800?style=for-the-badge&logo=grafana)
 
-### ⚡ Автоматическое хеджирование криптовалюты | Go + PostgreSQL + Docker
+### ⚡ Автоматическое хеджирование криптовалюты | Go 1.26 + PostgreSQL + Docker
 
 </div>
 
