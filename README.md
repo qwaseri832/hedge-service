@@ -1,9 +1,9 @@
-Извините! Я перепутал. Вот правильное README для **Hedge Service**:
+Вот чистое README для Hedge Service без лишних вопросов, с картинками и эмодзи:
 
 ---
 
 ```markdown
-# 🛡️ Hedge Service — Automated Crypto Hedging Microservice
+# 🛡️ Hedge Service
 
 <div align="center">
 
@@ -12,9 +12,8 @@
 ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/qwaseri832/hedge-service)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Docker Pulls](https://img.shields.io/badge/docker-ready-brightgreen)
-![Go Report Card](https://goreportcard.com/badge/github.com/qwaseri832/hedge-service)
 
-*Микросервис автоматического хеджирования криптовалюты с паттернами распределённых систем*
+*Микросервис автоматического хеджирования криптовалюты*
 
 </div>
 
@@ -22,121 +21,108 @@
 
 ## 📖 О проекте
 
-**Hedge Service** — это production-ready микросервис на Go, который **автоматически покупает криптовалюту (BTC)** при поступлении фиатного перевода от клиента.
-
-**Зачем:** чтобы клиент не потерял на курсовой разнице, пока ждёт зачисления. Как только пришёл фиат (USD/RUB) — сервис мгновенно покупает BTC на бирже по текущему курсу и уведомляет клиента.
+**Hedge Service** — микросервис, который **автоматически покупает криптовалюту (BTC)** при поступлении фиатного перевода от клиента. Это защищает клиента от потерь на курсовой разнице во время ожидания зачисления.
 
 ---
 
-## 🎯 Бизнес-сценарий
+## 🎯 Как это работает
 
 ```
 1. Клиент отправляет $500 USD на счёт компании
             ↓
-2. Платёжная система отправляет webhook в Hedge Service
+2. Платёжная система отправляет webhook
             ↓
-3. Сервис конвертирует USD в BTC (если нужно)
+3. Сервис конвертирует USD в BTC
             ↓
-4. Размещает рыночный ордер на бирже
+4. Размещается рыночный ордер на бирже
             ↓
-5. Клиент получает уведомление: 
-   "Ваша заявка принята. Криптовалюта будет отправлена 
-    на ваш кошелёк в течение 10 минут"
+5. Клиент получает уведомление
             ↓
-6. Криптовалюта поступает на кошелёк клиента ✅
+6. Криптовалюта поступает на кошелёк ✅
 ```
 
 ---
 
 ## 🏗 Архитектура
 
-```mermaid
-graph TB
-    A[Платёжная система] -->|Webhook| B[HTTP Handler]
-    B -->|HMAC проверка| C[HedgeUseCase]
-    C -->|Сохранение| D[(PostgreSQL)]
-    
-    E[TransferWorker x2] -->|SKIP LOCKED| D
-    E -->|GetPrice| F[Биржа]
-    E -->|PlaceOrder| F
-    
-    F -->|Результат| G[Order + Outbox]
-    G -->|Атомарно| D
-    
-    H[NotificationWorker] -->|SKIP LOCKED| D
-    H -->|Отправка| I[Email/Webhook]
-    
-    J[Prometheus] -->|Сбор метрик| K[Grafana]
+![Архитектура](docs/architecture.png)
+
+```
+┌─────────────────┐
+│  Платёжная       │
+│  система         │
+└────────┬────────┘
+         │ Webhook
+         ▼
+┌─────────────────┐     ┌─────────────────┐
+│  HTTP Handler   │────▶│   PostgreSQL    │
+└────────┬────────┘     └─────────────────┘
+         │
+         ▼
+┌─────────────────┐     ┌─────────────────┐
+│  HedgeUseCase   │────▶│     Биржа       │
+└────────┬────────┘     └─────────────────┘
+         │
+         ▼
+┌─────────────────┐     ┌─────────────────┐
+│  TransferWorker │────▶│   Outbox        │
+└─────────────────┘     └─────────────────┘
+         │
+         ▼
+┌─────────────────┐     ┌─────────────────┐
+│ Notification    │────▶│   Email/Webhook │
+│ Worker          │     └─────────────────┘
+└─────────────────┘
 ```
 
 ---
 
-## 🔑 Ключевые паттерны
+## 🔑 Ключевые возможности
 
-### 1. Outbox Pattern 📤
+### Outbox Pattern 📤
 
-Ордер и уведомление создаются в **одной транзакции** атомарно. Если сервис упадёт между созданием ордера и отправкой уведомления — при рестарте воркер дочитает outbox и отправит уведомление.
+Ордер и уведомление создаются атомарно в одной транзакции. Если сервис упадёт — при рестарте уведомление всё равно будет отправлено.
 
-```sql
-BEGIN;
-  INSERT INTO orders (...) VALUES (...);
-  INSERT INTO outbox_notifications (...) VALUES (...);
-COMMIT; -- Атомарно!
-```
+### SKIP LOCKED 🎯
 
-### 2. SKIP LOCKED как очередь 🎯
+PostgreSQL используется как очередь. Несколько воркеров обрабатывают задачи параллельно без конфликтов.
 
-Вместо Redis/Kafka используем `SELECT ... FOR UPDATE SKIP LOCKED`. Несколько воркеров могут параллельно забирать задачи без конфликтов.
+### Идемпотентность 🔄
 
-```sql
-SELECT * FROM transfers 
-WHERE status = 'pending' 
-ORDER BY created_at ASC 
-LIMIT 1 
-FOR UPDATE SKIP LOCKED;
-```
+Повторные запросы не создают дубли:
+- `external_id` — уникальный ключ в БД
+- `client_order_id` — уникальный ключ для биржи
 
-### 3. Идемпотентность 🔄
+### Финансовая точность 💰
 
-- `external_id` с `UNIQUE` constraint в БД — повторный webhook возвращает `already_registered`
-- `client_order_id = "hedge-{transfer_id}"` — биржа не создаст дубль ордера
-
-### 4. Финансовая точность 💰
-
-Используем `decimal` вместо `float64`. В финансах `0.1 + 0.2` должно быть **точно** `0.3`.
+Используется `decimal` вместо `float64`:
 
 ```go
-// ❌ Никогда так не делайте в финансах
-amount := 0.1 + 0.2 // Может быть 0.30000000000000004
+// ❌ Плохо
+amount := 0.1 + 0.2 // 0.30000000000000004
 
-// ✅ Всегда так
-amount := decimal.NewFromFloat(0.1).Add(decimal.NewFromFloat(0.2)) // Точно 0.3
+// ✅ Хорошо
+amount := decimal.NewFromFloat(0.1).Add(decimal.NewFromFloat(0.2)) // 0.3
 ```
 
 ---
 
 ## 🚀 Быстрый старт
 
-### Требования
-
-- Docker & Docker Compose
-- Make (опционально)
-- Go 1.22+ (для локального запуска)
-
-### Запуск через Docker Compose
+### Запуск через Docker
 
 ```bash
-# Клонируйте репозиторий
+# Клонировать репозиторий
 git clone https://github.com/qwaseri832/hedge-service.git
 cd hedge-service
 
-# Запустите все сервисы
+# Запустить все сервисы
 docker-compose up -d
 
-# Проверьте здоровье
+# Проверить работу
 curl http://localhost:8080/health
 
-# Отправьте тестовый перевод
+# Отправить тестовый перевод
 curl -X POST http://localhost:8080/webhook/transfer \
   -H "Content-Type: application/json" \
   -d '{
@@ -147,17 +133,17 @@ curl -X POST http://localhost:8080/webhook/transfer \
     "wallet_addr": "bc1qxy2kgdygjrsqtzq2n0yrf249..."
   }'
 
-# Посмотрите логи
+# Посмотреть логи
 docker-compose logs -f hedge-service
 ```
 
-### Запуск локально (без Docker)
+### Запуск локально
 
 ```bash
-# Установите зависимости
+# Установить зависимости
 go mod download
 
-# Запустите PostgreSQL
+# Запустить PostgreSQL
 docker run -d --name postgres \
   -e POSTGRES_DB=hedge \
   -e POSTGRES_USER=postgres \
@@ -165,11 +151,17 @@ docker run -d --name postgres \
   -p 5432:5432 \
   postgres:16-alpine
 
-# Накатите миграции
+# Накатить миграции
 make migrate-up
 
-# Запустите сервис
+# Запустить сервис
 go run cmd/main.go
+```
+
+### Остановка
+
+```bash
+docker-compose down
 ```
 
 ---
@@ -178,7 +170,7 @@ go run cmd/main.go
 
 ### POST /webhook/transfer
 
-Принимает уведомление о входящем переводе.
+Принимает уведомление о переводе.
 
 **Запрос:**
 
@@ -221,7 +213,7 @@ go run cmd/main.go
 
 ### GET /orders/{id}
 
-Детали ордера на бирже.
+Детали ордера.
 
 **Ответ:**
 
@@ -238,7 +230,7 @@ go run cmd/main.go
 
 ### GET /health
 
-Health check.
+Проверка состояния.
 
 ```json
 {"status": "ok"}
@@ -250,17 +242,17 @@ Health check.
 
 ---
 
-## 📊 Метрики (Prometheus)
+## 📊 Метрики
 
 | Метрика | Описание |
 |---|---|
-| `hedge_transfers_total` | Количество входящих переводов по статусу |
+| `hedge_transfers_total` | Количество переводов по статусу |
 | `hedge_orders_total` | Количество ордеров по статусу |
 | `hedge_order_execution_seconds` | Время выполнения ордера |
-| `hedge_notifications_total` | Количество отправленных уведомлений |
+| `hedge_notifications_total` | Количество уведомлений |
 | `hedge_webhook_requests_total` | Количество webhook запросов |
 | `hedge_http_request_duration_seconds` | Время ответа HTTP |
-| `hedge_pending_transfers` | Текущее количество ожидающих переводов |
+| `hedge_pending_transfers` | Текущие ожидающие переводы |
 
 ---
 
@@ -268,31 +260,17 @@ Health check.
 
 ```
 hedge-service/
-├── cmd/
-│   └── main.go              # Точка входа, DI
-├── config/
-│   └── config.go            # Конфигурация из env
+├── cmd/main.go              # Точка входа
+├── config/config.go         # Конфигурация
 ├── internal/
-│   ├── domain/
-│   │   ├── models.go        # Transfer, Order, OutboxNotification
-│   │   └── repository.go    # Интерфейсы репозиториев
-│   ├── repository/
-│   │   └── postgres.go      # Реализация: SKIP LOCKED, Outbox транзакция
-│   ├── usecase/
-│   │   └── hedge.go         # Бизнес-логика
-│   ├── worker/
-│   │   ├── transfer_worker.go      # Обработка переводов
-│   │   └── notification_worker.go  # Отправка уведомлений
-│   ├── handler/
-│   │   └── http.go          # Webhook + status endpoints + HMAC
-│   ├── platform/
-│   │   ├── exchange.go      # Интерфейс биржи + mock
-│   │   └── notification.go  # Интерфейс уведомлений + mock
-│   └── metrics/
-│       └── metrics.go       # Prometheus метрики
-├── migrations/
-│   ├── 001_init.up.sql
-│   └── 001_init.down.sql
+│   ├── domain/              # Сущности и интерфейсы
+│   ├── repository/          # Работа с БД
+│   ├── usecase/             # Бизнес-логика
+│   ├── worker/              # Фоновые воркеры
+│   ├── handler/             # HTTP обработчики
+│   ├── platform/            # Интеграции (биржа, уведомления)
+│   └── metrics/             # Prometheus метрики
+├── migrations/              # SQL миграции
 ├── docker/
 │   └── prometheus.yml
 ├── docker-compose.yml
@@ -309,28 +287,26 @@ hedge-service/
 | Переменная | По умолчанию | Описание |
 |---|---|---|
 | `HTTP_ADDR` | `:8080` | Адрес HTTP сервера |
-| `DATABASE_URL` | `postgres://postgres:postgres@localhost:5432/hedge?sslmode=disable` | Строка подключения к PostgreSQL |
-| `WEBHOOK_SECRET` | `""` | HMAC секрет для валидации webhook |
-| `TRANSFER_WORKER_COUNT` | `2` | Количество воркеров для переводов |
-| `NOTIFICATION_WORKER_COUNT` | `1` | Количество воркеров для уведомлений |
-| `EXCHANGE_FAIL_RATE` | `0.1` | Вероятность ошибки мок-биржи (0.0–1.0) |
+| `DATABASE_URL` | `postgres://postgres:postgres@localhost:5432/hedge?sslmode=disable` | Подключение к PostgreSQL |
+| `WEBHOOK_SECRET` | `""` | HMAC секрет для webhook |
+| `TRANSFER_WORKER_COUNT` | `2` | Количество воркеров переводов |
+| `NOTIFICATION_WORKER_COUNT` | `1` | Количество воркеров уведомлений |
+| `EXCHANGE_FAIL_RATE` | `0.1` | Вероятность ошибки мок-биржи |
 
 ---
 
 ## 🧪 Тестирование
 
 ```bash
-# Запуск всех тестов
+# Все тесты
 make test
 
-# Запуск с покрытием
+# Покрытие
 make test-cover
 
 # Линтер
 make lint
 ```
-
-Юнит-тесты покрывают доменную логику без зависимостей от БД или биржи. Включают тест на финансовую точность `decimal` vs `float64`.
 
 ---
 
@@ -338,48 +314,37 @@ make lint
 
 | Библиотека | Назначение |
 |---|---|
-| [pgx](https://github.com/jackc/pgx) | Драйвер для PostgreSQL |
+| [pgx](https://github.com/jackc/pgx) | PostgreSQL драйвер |
 | [shopspring/decimal](https://github.com/shopspring/decimal) | Финансовая точность |
 | [prometheus/client_golang](https://github.com/prometheus/client_golang) | Метрики |
 | [testcontainers](https://github.com/testcontainers/testcontainers-go) | Интеграционные тесты |
-| [google/uuid](https://github.com/google/uuid) | Генерация UUID |
 
 ---
 
-## 🐳 Docker Compose сервисы
+## 🐳 Сервисы Docker
 
 | Сервис | Порт | Назначение |
 |---|---|---|
-| `postgres` | 5432 | Основная БД |
+| `postgres` | 5432 | База данных |
 | `hedge-service` | 8080 | API сервис |
 | `prometheus` | 9090 | Сбор метрик |
-| `grafana` | 3000 | Визуализация (admin/admin) |
-
-
+| `grafana` | 3000 | Визуализация |
 
 ---
 
-## 📝 License
+## 📝 Лицензия
 
-MIT © [Ваше имя]
-
----
-
-## 🙏 Благодарности
-
-- [Shopify](https://github.com/shopspring/decimal) — за `decimal`
-- [Prometheus](https://prometheus.io/) — за мониторинг
-- [Testcontainers](https://www.testcontainers.org/) — за интеграционные тесты
+MIT © 2026
 
 ---
 
 <div align="center">
 
-**⭐ Не забудьте поставить звезду, если проект был полезен!**
+**⭐ Поставьте звезду, если проект полезен!**
 
 </div>
 ```
 
 ---
 
-Это готовое README для **Hedge Service**. Его можно скопировать и сохранить как `README.md` в корне проекта. Картинки вставляются через ссылки на файлы в папке `docs/` или внешние ссылки.
+Это готовое README для **Hedge Service**. Сохраните как `README.md` в корне проекта. Картинку архитектуры (если есть) положите в папку `docs/architecture.png`.
